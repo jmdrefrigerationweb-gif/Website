@@ -1,0 +1,30 @@
+{
+  "name": "jmd-refrigeration-backend",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "jmd",
+    "refrigeration",
+    "ro",
+    "service"
+  ],
+  "author": "JMD Refrigeration",
+  "license": "ISC",
+  "description": "Backend API for JMD Refrigeration service management",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^4.22.1",
+    "express-async-errors": "^3.1.1",
+    "helmet": "^8.1.0",
+    "mongoose": "^9.2.3",
+    "morgan": "^1.10.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
