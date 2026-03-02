@@ -7,11 +7,19 @@ const morgan = require('morgan');
 const connectDB = require('./src/config/db');
 const customerRoutes = require('./src/routes/customerRoutes');
 const { errorHandler } = require('./src/middleware/errorHandler');
+const { getWhatsAppStatus, isTextBeeConfigured } = require('./src/utils/messageSender');
 
 const app = express();
 
 // Connect to MongoDB
 connectDB();
+
+// Log TextBee SMS configuration status
+if (isTextBeeConfigured()) {
+  console.log('✅ TextBee SMS Gateway configured — reminders will be sent as SMS via your Android phone');
+} else {
+  console.log('⚠️  TextBee not configured — reminders will be SIMULATED (add TEXTBEE_API_KEY & TEXTBEE_DEVICE_ID to .env)');
+}
 
 // Middleware
 app.use(helmet());
@@ -30,6 +38,11 @@ app.use('/api/customers', customerRoutes);
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// WhatsApp / Meta API status — frontend polls this
+app.get('/api/whatsapp/status', (req, res) => {
+  res.json({ status: getWhatsAppStatus() });
 });
 
 // 404 handler

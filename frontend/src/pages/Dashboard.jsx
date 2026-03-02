@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { Bell, Send, EyeOff, CheckSquare, Square, RefreshCw, Droplets } from 'lucide-react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { Bell, Send, EyeOff, CheckSquare, Square, RefreshCw, Droplets, Wifi, WifiOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
 import { customerAPI } from '../services/api';
+import api from '../services/api';
 import CustomerCard3D from '../components/CustomerCard3D';
 import EditCustomerModal from '../components/EditCustomerModal';
 import { formatDate, getNextServiceDate, getUrgencyColor } from '../utils/helpers';
@@ -16,8 +17,24 @@ const Dashboard = () => {
     const [ignoreModal, setIgnoreModal] = useState({ open: false, customerId: null });
     const [ignoreDays, setIgnoreDays] = useState(7);
     const [sendingReminder, setSendingReminder] = useState(false);
+    const [waStatus, setWaStatus] = useState('not_configured');
 
     const currentMonth = new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+
+    // Poll WhatsApp connection status every 5 seconds
+    useEffect(() => {
+        const checkWA = async () => {
+            try {
+                const res = await api.get('/whatsapp/status');
+                setWaStatus(res.status || 'disconnected');
+            } catch {
+                setWaStatus('disconnected');
+            }
+        };
+        checkWA();
+        const interval = setInterval(checkWA, 5000);
+        return () => clearInterval(interval);
+    }, []);
 
     useEffect(() => {
         fetchPendingReminders();
@@ -46,12 +63,12 @@ const Dashboard = () => {
         try {
             const res = await customerAPI.sendReminders(selected);
             const results = res.results || [];
-            const sent = results.filter((r) => r.status === 'sent' || r.status === 'sent_sms').length;
-            const simulated = results.filter((r) => r.status === 'simulated').length;
+            const sent = results.filter((r) => r.status === 'sent').length;
+            const pending = results.filter((r) => r.status === 'pending').length;
             const failed = results.filter((r) => r.status === 'error').length;
 
-            if (sent > 0) toast.success(`✅ ${sent} reminder(s) sent!`);
-            if (simulated > 0) toast(`📋 ${simulated} reminder(s) simulated (configure Twilio to enable real sending)`, { icon: 'ℹ️', duration: 5000 });
+            if (sent > 0) toast.success(`✅ ${sent} WhatsApp reminder(s) sent!`);
+            if (pending > 0) toast(`📱 WhatsApp not connected — scan QR in terminal first`, { icon: '⚠️', duration: 6000 });
             if (failed > 0) toast.error(`❌ ${failed} reminder(s) failed`);
             setSelected([]);
         } catch (err) {
@@ -119,6 +136,11 @@ const Dashboard = () => {
                         <span>{selected.length} selected</span>
                     </div>
                 )}
+                {/* WhatsApp / Meta API Status */}
+                <div className={`stat-pill wa-status wa-${waStatus}`}>
+                    {waStatus === 'ready' && <><Wifi size={14} /><span>WhatsApp Ready</span></>}
+                    {waStatus === 'not_configured' && <><WifiOff size={14} /><span>WhatsApp Not Set Up</span></>}
+                </div>
             </div>
 
             {/* Loading State */}

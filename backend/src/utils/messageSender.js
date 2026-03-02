@@ -1,78 +1,102 @@
+const axios = require('axios');
 const { formatDate } = require('./reminderLogic');
 
 /**
- * Message Templates for reminders
+ * TextBee.dev — Android SMS Gateway
+ *
+ * Setup (5 minutes):
+ * 1. Go to https://textbee.dev → Sign up free
+ * 2. On dashboard → "Add Device" → scan QR code from the TextBee Android app
+ * 3. Copy your API Key → TEXTBEE_API_KEY in .env
+ * 4. Copy your Device ID → TEXTBEE_DEVICE_ID in .env
+ * 5. Install TextBee app on Android → Settings > Apps > TextBee > Battery → set "Unrestricted"
+ *
+ * Free Tier: 300 SMS/month — perfect for this use case
  */
-const generateSMSMessage = (customer, nextServiceDate) => {
-    return `Dear ${customer.name}, your RO water purifier service is due this month (${formatDate(nextServiceDate)}). Please contact JMD Refrigeration to schedule your service. Call us: ${process.env.BUSINESS_PHONE || '9999999999'}`;
+
+const TEXTBEE_BASE = 'https://api.textbee.dev/api/v1';
+
+// ─── Check if TextBee is configured ──────────────────────────────────────────
+const isTextBeeConfigured = () => {
+    return !!(process.env.TEXTBEE_API_KEY && process.env.TEXTBEE_DEVICE_ID);
 };
 
-const generateWhatsAppMessage = (customer, nextServiceDate) => {
+// ─── Get status for dashboard ─────────────────────────────────────────────────
+const getWhatsAppStatus = () => {
+    if (isTextBeeConfigured()) return 'ready';
+    return 'not_configured';
+};
+
+// ─── Format phone for Indian numbers ─────────────────────────────────────────
+const formatPhone = (phone) => {
+    let p = phone.replace(/\D/g, '');
+    if (p.startsWith('0')) p = p.substring(1);
+    if (!p.startsWith('91') && p.length === 10) p = '91' + p;
+    return `+${p}`;
+};
+
+// ─── SMS Message Template ─────────────────────────────────────────────────────
+const generateSMSMessage = (customer, nextServiceDate) => {
     return (
-        `🌊 *JMD Refrigeration - Service Reminder* 🌊\n\n` +
-        `Hello *${customer.name}* 👋,\n\n` +
-        `Your *RO Water Purifier* is due for service this month *(${formatDate(nextServiceDate)})*.\n\n` +
-        `Regular servicing ensures:\n` +
-        `✅ Clean & Pure Water\n` +
-        `✅ Long System Life\n` +
-        `✅ Best Performance\n\n` +
-        `📞 *Call/WhatsApp us to book your service:*\n` +
-        `${process.env.BUSINESS_PHONE || '9999999999'}\n\n` +
-        `_JMD Refrigeration — Trusted RO Service Since Years_ 💧`
+        `JMD Refrigeration - Service Reminder\n\n` +
+        `Dear ${customer.name},\n` +
+        `Your RO water purifier service is due this month (${formatDate(nextServiceDate)}).\n\n` +
+        `Please call us to schedule: ${process.env.BUSINESS_PHONE || 'our number'}\n\n` +
+        `- JMD Refrigeration`
     );
 };
 
-/**
- * Send a reminder via Twilio WhatsApp or SMS
- * To use this:
- *  1. Create a Twilio account at https://www.twilio.com
- *  2. Get your Account SID and Auth Token
- *  3. Set up a WhatsApp Sandbox or verified number
- *  4. Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE to .env
- */
+// ─── Send SMS via TextBee ─────────────────────────────────────────────────────
+const sendSMSViaTextBee = async (phone, message) => {
+    const response = await axios.post(
+        `${TEXTBEE_BASE}/gateway/devices/${process.env.TEXTBEE_DEVICE_ID}/send-sms`,
+        {
+            recipients: [formatPhone(phone)],
+            message,
+        },
+        {
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': process.env.TEXTBEE_API_KEY,
+            },
+            timeout: 15000,
+        }
+    );
+    return response.data;
+};
+
+// ─── Main sendReminder function ───────────────────────────────────────────────
 const sendReminder = async (customer, nextServiceDate) => {
-    // If Twilio credentials are not configured, return a simulated success
-    if (
-        !process.env.TWILIO_ACCOUNT_SID ||
-        !process.env.TWILIO_AUTH_TOKEN ||
-        !process.env.TWILIO_PHONE
-    ) {
-        console.log(`[REMINDER SIMULATION] Would send to ${customer.phone} (${customer.name})`);
-        console.log(generateWhatsAppMessage(customer, nextServiceDate));
+    const message = generateSMSMessage(customer, nextServiceDate);
+
+    // Simulate if not configured
+    if (!isTextBeeConfigured()) {
+        console.log(`[SMS SIMULATION] Would send to ${customer.phone} (${customer.name})`);
+        console.log(message);
         return {
             status: 'simulated',
-            message: `Reminder simulated for ${customer.name} (${customer.phone}). Configure Twilio in .env to enable real sending.`,
+            message: `TextBee not configured. Add TEXTBEE_API_KEY and TEXTBEE_DEVICE_ID to .env.`,
         };
     }
 
-    // Real Twilio sending
-    const twilio = require('twilio');
-    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-
-    const toPhone = customer.phone.startsWith('+') ? customer.phone : `+91${customer.phone}`;
-
     try {
-        // Attempt WhatsApp first
-        const message = await client.messages.create({
-            from: `whatsapp:${process.env.TWILIO_PHONE}`,
-            to: `whatsapp:${toPhone}`,
-            body: generateWhatsAppMessage(customer, nextServiceDate),
-        });
-        return { status: 'sent', message: `WhatsApp message sent. SID: ${message.sid}` };
-    } catch (whatsappError) {
-        console.warn(`WhatsApp failed for ${customer.phone}, trying SMS: ${whatsappError.message}`);
-        try {
-            // Fallback to SMS
-            const sms = await client.messages.create({
-                from: process.env.TWILIO_PHONE,
-                to: toPhone,
-                body: generateSMSMessage(customer, nextServiceDate),
-            });
-            return { status: 'sent_sms', message: `SMS sent. SID: ${sms.sid}` };
-        } catch (smsError) {
-            throw new Error(`Failed to send message: ${smsError.message}`);
-        }
+        const result = await sendSMSViaTextBee(customer.phone, message);
+        console.log(`✅ SMS sent to ${customer.name} (${customer.phone})`);
+        return {
+            status: 'sent',
+            message: `SMS sent to ${customer.name} via TextBee`,
+            data: result,
+        };
+    } catch (err) {
+        const detail = err.response?.data?.message || err.message;
+        console.error(`❌ TextBee error for ${customer.phone}: ${detail}`);
+        throw new Error(`TextBee error: ${detail}`);
     }
 };
 
-module.exports = { sendReminder, generateWhatsAppMessage, generateSMSMessage };
+module.exports = {
+    sendReminder,
+    getWhatsAppStatus,
+    isTextBeeConfigured,
+    generateSMSMessage,
+};
