@@ -14,6 +14,7 @@ const ServiceEntrySchema = new mongoose.Schema({
     totalCost: { type: Number, required: true, min: 0 },
     notes: { type: String, trim: true, default: '' },
     nextServiceAfterMonths: { type: Number, min: 0, default: 0 },
+    source: { type: String, default: 'manual' },
 });
 
 // Main customer schema
@@ -22,12 +23,18 @@ const CustomerSchema = new mongoose.Schema(
         name: { type: String, required: [true, 'Customer name is required'], trim: true },
         phone: {
             type: String,
-            required: [true, 'Phone number is required'],
-            unique: true,
             trim: true,
-            match: [/^\+?[0-9]{10,15}$/, 'Please enter a valid phone number'],
+            default: '',
+            validate: {
+                validator: function(v) {
+                    return v === '' || /^\+?[0-9]{10,15}$/.test(v);
+                },
+                message: 'Please enter a valid phone number'
+            }
         },
         address: { type: String, required: [true, 'Address is required'], trim: true },
+        normalizedPhone: { type: String, default: '', index: true },
+        normalizedAddress: { type: String, default: '', index: true },
         serviceEntries: [ServiceEntrySchema],
         ignoredUntil: { type: Date, default: null },
     },

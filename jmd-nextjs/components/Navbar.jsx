@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Droplets, LayoutDashboard, Search, Plus } from 'lucide-react';
+import { Droplets, LayoutDashboard, Search, Plus, Upload, Users } from 'lucide-react';
 
 const Navbar = () => {
     const pathname = usePathname();
@@ -12,6 +12,8 @@ const Navbar = () => {
         { to: '/', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
         { to: '/search', icon: <Search size={20} />, label: 'Search' },
         { to: '/add', icon: <Plus size={20} />, label: 'Add Card' },
+        { to: '/import', icon: <Upload size={20} />, label: 'Import' },
+        { to: '/all', icon: <Users size={20} />, label: 'All Cards' },
     ];
 
     return (
